@@ -1,13 +1,13 @@
 {
-  "name": "nodejs",
-  "version": "1.0.0",
-  "description": "",
+  "name": "guardian-bot",
+  "version": "4.0.0",
+  "description": "Professional Discord Security Bot for Noodles & Pistacio",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "register": "node scripts/register.js",
-    "test:panic": "node scripts/test_panic.js"
+    "deploy": "node src/deploy.js",
+    "dev": "nodemon src/index.js"
   },
   "keywords": [],
   "author": "",
