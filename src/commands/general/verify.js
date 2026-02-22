@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import GatewayConfig from '../../modules/gateway/schema.js';
 import { performVerificationFlow } from '../../modules/gateway/actions.js';
+import { performVerificationCheck } from '../../modules/gateway/checker.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -26,13 +27,30 @@ export default {
         return;
       }
 
-      // Perform verification actions
+      // Perform comprehensive verification check first
+      const check = performVerificationCheck(member.user, member, config);
+
+      if (!check.verified) {
+        await interaction.reply({
+          content: `❌ Verification failed: ${check.errors.join(', ')}`,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // If check passes, perform verification flow: add roles, send DM, etc.
       const flow = await performVerificationFlow(member, null, config);
 
       if (flow.success) {
-        await interaction.reply({ content: '✅ Verification successful.', ephemeral: true });
+        await interaction.reply({
+          content: '✅ Verification successful! Welcome to the server.',
+          ephemeral: true,
+        });
       } else {
-        await interaction.reply({ content: `❌ Verification failed: ${flow.rolesToast?.message || flow.reactionToast?.message || 'Unknown error'}`, ephemeral: true });
+        await interaction.reply({
+          content: `❌ Verification failed: ${flow.rolesToast?.message || flow.dmToast?.message || 'Unknown error'}`,
+          ephemeral: true,
+        });
       }
     } catch (err) {
       console.error('[verify command] Error:', err);

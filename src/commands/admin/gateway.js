@@ -105,6 +105,9 @@ export default {
         const unverifiedRole = options.getRole('unverified_role', true);
         const channel = options.getChannel('channel', true);
         const triggerWord = options.getString('trigger_word') || '';
+        const successDM = options.getString('success_dm') || undefined;
+        const embedTitle = options.getString('embed_title') || undefined;
+        const embedDescription = options.getString('embed_description') || undefined;
 
         const result = await client.gateway.setupCommand(
           guild.id,
@@ -112,7 +115,10 @@ export default {
           verifiedRole.id,
           unverifiedRole.id,
           channel.id,
-          triggerWord
+          triggerWord,
+          successDM,
+          embedTitle,
+          embedDescription
         );
 
         if (result.success) {

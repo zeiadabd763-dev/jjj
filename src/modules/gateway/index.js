@@ -153,8 +153,12 @@ export default function GatewayModule(client) {
           return;
         }
 
+        // Detect if second parameter is a Message (has content) or Interaction
+        // Message objects have a 'content' property, Interaction objects don't
+        const triggerMessage = (interaction && typeof interaction.content === 'string') ? interaction : null;
+        
         // Execute verification flow: add roles, send DM, react if needed
-        const flow = await performVerificationFlow(member, interaction.isMessage?.() ? interaction : null, config);
+        const flow = await performVerificationFlow(member, triggerMessage, config);
 
         // Log results
         if (method === 'trigger') {
@@ -208,16 +212,23 @@ export default function GatewayModule(client) {
      * Command: Setup gateway for a guild
      * Usage in a slash command: /gateway setup <method> <verified_role> <unverified_role> <channel>
      */
-    async setupCommand(guildId, method, verifiedRoleId, unverifiedRoleId, channelId, triggerWord = '') {
+    async setupCommand(guildId, method, verifiedRoleId, unverifiedRoleId, channelId, triggerWord = '', successDM = undefined, embedTitle = undefined, embedDescription = undefined) {
       try {
-        const config = await this.setConfig(guildId, {
+        const configData = {
           method,
           verifiedRole: verifiedRoleId,
           unverifiedRole: unverifiedRoleId,
           channelId,
           triggerWord,
           enabled: true,
-        });
+        };
+
+        // Add optional parameters if provided
+        if (successDM) configData.successDM = successDM;
+        if (embedTitle) configData.embedTitle = embedTitle;
+        if (embedDescription) configData.embedDescription = embedDescription;
+
+        const config = await this.setConfig(guildId, configData);
 
         // Send verification prompt to the channel
         const guild = client.guilds.cache.get(guildId);
