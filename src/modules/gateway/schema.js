@@ -34,11 +34,6 @@ const GatewaySchema = new mongoose.Schema(
       default: '',
       description: 'Word/phrase that triggers verification (for trigger method)',
     },
-    triggerEmoji: {
-      type: String,
-      default: '✅',
-      description: 'Emoji used when trigger word is matched',
-    },
     successDM: {
       type: String,
       default: 'You have been verified! Welcome to the server.',
@@ -53,22 +48,6 @@ const GatewaySchema = new mongoose.Schema(
       type: String,
       default: 'Click the button below to verify your account and gain access to the server.',
       description: 'Description for the verification embed',
-    },
-    embedColor: {
-      type: String,
-      default: '#2ecc71',
-      description: 'Hex color code for verification embeds (default: green)',
-    },
-    embedImage: {
-      type: String,
-      default: '',
-      description: 'URL for banner/thumbnail image in verification embeds',
-    },
-    customResponses: {
-      type: Map,
-      of: String,
-      default: new Map(),
-      description: 'Custom messages for specific events (e.g., already_verified_button, already_verified_trigger)',
     },
     raidMode: {
       type: Boolean,

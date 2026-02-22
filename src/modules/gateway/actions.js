@@ -1,6 +1,6 @@
 /**
  * Gateway Actions Module
- * Handles role management, DM notifications, and styled embed responses
+ * Handles role management, DM notifications, and reactions
  */
 
 /**
@@ -50,47 +50,22 @@ export async function grantRoles(member, config) {
 }
 
 /**
- * Create a styled embed for verification messages
- * @param {Object} config - Gateway config from database
- * @param {string} message - Message content for the embed
- * @param {boolean} isSuccess - Whether this is a success message
- * @returns {Object} Embed object
- */
-function createVerificationEmbed(config, message, isSuccess = true) {
-  const embedColor = config.embedColor ? parseInt(config.embedColor.replace('#', ''), 16) : 0x2ecc71;
-  
-  const embed = {
-    title: config.embedTitle || '🔐 Server Verification',
-    description: message || config.embedDescription || 'Verification processed.',
-    color: embedColor,
-    footer: { text: 'Guardian Bot v4.0' },
-  };
-
-  if (config.embedImage && config.embedImage.trim()) {
-    embed.image = { url: config.embedImage };
-  }
-
-  return embed;
-}
-
-/**
- * Send a styled DM to the user
+ * Send a customized DM to the user
  * @param {User} user - Discord user to DM
- * @param {Object} config - Gateway config from database
+ * @param {string} message - DM content
+ * @param {Object} config - Gateway config (optional for embed details)
  * @returns {Object} { success: boolean, message: string }
  */
-export async function sendVerificationDM(user, config = {}) {
+export async function sendVerificationDM(user, message, config = {}) {
   try {
     if (!user || !user.send) {
       return { success: false, message: 'Cannot DM this user' };
     }
 
-    const dmText = config.successDM || 'You have been verified! Welcome to the server.';
-    
-    const dmEmbed = createVerificationEmbed(config, dmText, true);
+    const fullMessage = message || config.successDM || 'You have been verified! Welcome to the server.';
 
     await user.send({
-      embeds: [dmEmbed],
+      content: fullMessage,
     });
 
     return { success: true, message: 'DM sent successfully' };
@@ -102,32 +77,20 @@ export async function sendVerificationDM(user, config = {}) {
 }
 
 /**
- * Send verification response in channel (for already verified users)
- * @param {TextChannel} channel - Channel to send message to
- * @param {Object} config - Gateway config
- * @param {string} method - Verification method (button, trigger, slash)
+ * React with ✅ to a message (for Trigger method confirmation)
+ * @param {Message} message - Discord message to react to
  * @returns {Object} { success: boolean, message: string }
  */
-export async function sendAlreadyVerifiedMessage(channel, config, method) {
+export async function reactWithCheckmark(message) {
   try {
-    if (!channel || !channel.send) {
-      return { success: false, message: 'Invalid channel' };
+    if (!message || !message.react) {
+      return { success: false, message: 'Invalid message object' };
     }
 
-    // Fetch custom response from config based on method
-    const customKey = `already_verified_${method}`;
-    const customMessage = config.customResponses && config.customResponses.get(customKey);
-    const message = customMessage || `You are already verified in this server!`;
-
-    const embed = createVerificationEmbed(config, message, false);
-
-    await channel.send({
-      embeds: [embed],
-    });
-
-    return { success: true, message: 'Already verified message sent' };
+    await message.react('✅');
+    return { success: true, message: 'Reacted with ✅' };
   } catch (err) {
-    return { success: false, message: `Failed to send message: ${err.message}` };
+    return { success: false, message: `Failed to react: ${err.message}` };
   }
 }
 
@@ -136,13 +99,14 @@ export async function sendAlreadyVerifiedMessage(channel, config, method) {
  * @param {GuildMember} member - Member to verify
  * @param {Message|null} triggerMessage - Message that triggered verification (if using trigger method)
  * @param {Object} config - Gateway config
- * @returns {Object} { success: boolean, rolesToast: Object, dmToast: Object }
+ * @returns {Object} { success: boolean, rolesToast: Object, dmToast: Object, reactionToast: Object }
  */
 export async function performVerificationFlow(member, triggerMessage, config) {
   const results = {
     success: true,
     rolesToast: null,
     dmToast: null,
+    reactionToast: null,
   };
 
   // Step 1: Grant/Remove roles
@@ -151,10 +115,18 @@ export async function performVerificationFlow(member, triggerMessage, config) {
     results.success = false;
   }
 
-  // Step 2: Send styled DM
+  // Step 2: Send DM
   if (member.user) {
-    results.dmToast = await sendVerificationDM(member.user, config);
+    results.dmToast = await sendVerificationDM(member.user, null, config);
     // DM failure is non-fatal, so don't set success to false
+  }
+
+  // Step 3: React to trigger message if using trigger method
+  if (config.method === 'trigger' && triggerMessage) {
+    results.reactionToast = await reactWithCheckmark(triggerMessage);
+    if (!results.reactionToast.success) {
+      results.success = false;
+    }
   }
 
   return results;
@@ -172,8 +144,12 @@ export async function sendVerificationPrompt(channel, config) {
       return { success: false, message: 'Invalid channel' };
     }
 
-    const message = config.embedDescription || 'Click the button below to verify your account and gain access to the server.';
-    const embed = createVerificationEmbed(config, message);
+    const embed = {
+      color: 0x2ecc71,
+      title: config.embedTitle || '🔐 Server Verification',
+      description: config.embedDescription || 'Click the button below to verify your account and gain access to the server.',
+      footer: { text: 'Guardian Bot v4.0' },
+    };
 
     const components = [];
 
