@@ -66,13 +66,15 @@ export default function GatewayModule(client) {
         // Handle trigger word method
         if (config.method === 'trigger') {
           // Ignore empty messages
-          const content = (message.content || '').toString();
+          let content = (message.content || '').toString().trim();
           if (!content) return;
 
+          // Case-insensitive trigger word check
           if (checkTriggerWord(content, config.triggerWord)) {
-            // First react with checkmark emoji
+            // First react with the configured trigger emoji
             try {
-              await message.react('✅').catch(() => {});
+              const emoji = config.triggerEmoji || '✅';
+              await message.react(emoji).catch(() => {});
             } catch (err) {
               console.error('[Gateway] Failed to react to trigger message:', err.message);
             }

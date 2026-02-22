@@ -4,6 +4,7 @@
  */
 
 import { SlashCommandBuilder } from 'discord.js';
+import GatewayConfig from '../../modules/gateway/schema.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -70,6 +71,64 @@ export default {
     )
     .addSubcommand(subcommand =>
       subcommand
+        .setName('customize_ui')
+        .setDescription('Customize the look and feel of verification embeds')
+        .addStringOption(option =>
+          option
+            .setName('title')
+            .setDescription('Title for verification embeds')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('description')
+            .setDescription('Description text for verification embeds')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('color_hex')
+            .setDescription('Hex color code (e.g., #2ecc71)')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('image_url')
+            .setDescription('URL for banner/thumbnail image')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('trigger_emoji')
+            .setDescription('Emoji to react with on trigger word match')
+            .setRequired(false)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('customize_logic')
+        .setDescription('Customize verification behavior and responses')
+        .addStringOption(option =>
+          option
+            .setName('already_verified_button')
+            .setDescription('Message when user clicks button but is already verified')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('already_verified_trigger')
+            .setDescription('Message when user types trigger word but is already verified')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('already_verified_slash')
+            .setDescription('Message when user runs /verify but is already verified')
+            .setRequired(false)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
         .setName('disable')
         .setDescription('Disable gateway verification for your server')
     ),
@@ -131,6 +190,72 @@ export default {
             ephemeral: true,
           });
         }
+      } else if (subcommand === 'customize_ui') {
+        const title = options.getString('title');
+        const description = options.getString('description');
+        const colorHex = options.getString('color_hex');
+        const imageUrl = options.getString('image_url');
+        const triggerEmoji = options.getString('trigger_emoji');
+
+        const updateData = {};
+        if (title) updateData.embedTitle = title;
+        if (description) updateData.embedDescription = description;
+        if (colorHex) updateData.embedColor = colorHex;
+        if (imageUrl) updateData.embedImage = imageUrl;
+        if (triggerEmoji) updateData.triggerEmoji = triggerEmoji;
+
+        const config = await GatewayConfig.findOneAndUpdate(
+          { guildId: guild.id },
+          updateData,
+          { new: true }
+        );
+
+        if (config) {
+          await interaction.reply({
+            content: '✅ Verification UI customized successfully!',
+            ephemeral: true,
+          });
+        } else {
+          await interaction.reply({
+            content: '❌ Gateway not configured for this server. Run `/gateway setup` first.',
+            ephemeral: true,
+          });
+        }
+      } else if (subcommand === 'customize_logic') {
+        const alreadyVerifiedButton = options.getString('already_verified_button');
+        const alreadyVerifiedTrigger = options.getString('already_verified_trigger');
+        const alreadyVerifiedSlash = options.getString('already_verified_slash');
+
+        const config = await GatewayConfig.findOne({ guildId: guild.id });
+        if (!config) {
+          await interaction.reply({
+            content: '❌ Gateway not configured for this server. Run `/gateway setup` first.',
+            ephemeral: true,
+          });
+          return;
+        }
+
+        // Update custom responses
+        if (!config.customResponses) {
+          config.customResponses = new Map();
+        }
+
+        if (alreadyVerifiedButton) {
+          config.customResponses.set('already_verified_button', alreadyVerifiedButton);
+        }
+        if (alreadyVerifiedTrigger) {
+          config.customResponses.set('already_verified_trigger', alreadyVerifiedTrigger);
+        }
+        if (alreadyVerifiedSlash) {
+          config.customResponses.set('already_verified_slash', alreadyVerifiedSlash);
+        }
+
+        await config.save();
+
+        await interaction.reply({
+          content: '✅ Verification logic customized successfully!',
+          ephemeral: true,
+        });
       } else if (subcommand === 'disable') {
         const result = await client.gateway.disableCommand(guild.id);
         if (result.success) {
