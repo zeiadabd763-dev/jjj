@@ -18,10 +18,19 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
         const client = { commands: new Map() };
         await loadCommands(client);
 
-        const commands = Array.from(client.commands.values()).map(cmd => ({
-            name: cmd.name,
-            description: cmd.description || 'No description provided',
-        }));
+        const commands = Array.from(client.commands.values()).map(cmd => {
+            // Support both SlashCommandBuilder (has .data property) and old format
+            if (cmd.data) {
+                // New format: SlashCommandBuilder
+                return cmd.data.toJSON();
+            } else {
+                // Old format: simple object with name and description
+                return {
+                    name: cmd.name,
+                    description: cmd.description || 'No description provided',
+                };
+            }
+        });
 
         console.log(`[REGISTER] Clearing OLD commands for Guild ${guildId}...`);
         // Delete all existing commands in the guild
@@ -29,6 +38,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
         console.log('[REGISTER] ✓ Old commands cleared');
 
         console.log(`[REGISTER] Registering ${commands.length} new command(s)...`);
+        console.log('[REGISTER] Commands:', commands.map(c => c.name).join(', '));
         await rest.put(`/applications/${clientId}/guilds/${guildId}/commands`, { body: commands });
         console.log('[REGISTER] ✓ Commands registered successfully');
 

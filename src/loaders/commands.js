@@ -17,8 +17,18 @@ export default async function loadCommands(client) {
         try {
           const cmd = await import(pathToFileURL(res).href);
           const c = cmd.default;
-          if (!c || !c.name || typeof c.execute !== 'function') continue;
-          client.commands.set(c.name, c);
+          if (!c) continue;
+          
+          // Support both SlashCommandBuilder format (has .data property) and old format (has .name)
+          if (c.data) {
+            // New format: SlashCommandBuilder
+            if (typeof c.execute !== 'function') continue;
+            const commandName = c.data.name;
+            client.commands.set(commandName, c);
+          } else if (c.name && typeof c.execute === 'function') {
+            // Old format: simple object with name and execute
+            client.commands.set(c.name, c);
+          }
         } catch (err) {
           console.error(`Failed to load command ${res}:`, err);
         }
@@ -28,3 +38,4 @@ export default async function loadCommands(client) {
 
   await walk(commandsPath);
 }
+

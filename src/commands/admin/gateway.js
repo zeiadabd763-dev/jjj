@@ -3,9 +3,60 @@
  * Allows admins to configure the Gateway verification module
  */
 
+import { SlashCommandBuilder } from 'discord.js';
+
 export default {
-  name: 'gateway',
-  description: 'Configure the gateway verification module',
+  data: new SlashCommandBuilder()
+    .setName('gateway')
+    .setDescription('Configure the gateway verification module')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('setup')
+        .setDescription('Setup gateway verification for your server')
+        .addStringOption(option =>
+          option
+            .setName('method')
+            .setDescription('Verification method')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Button', value: 'button' },
+              { name: 'Reaction', value: 'reaction' },
+              { name: 'Trigger', value: 'trigger' },
+              { name: 'Slash', value: 'slash' },
+              { name: 'Join', value: 'join-check' }
+            )
+        )
+        .addRoleOption(option =>
+          option
+            .setName('verified_role')
+            .setDescription('Role to give verified users')
+            .setRequired(true)
+        )
+        .addRoleOption(option =>
+          option
+            .setName('unverified_role')
+            .setDescription('Penalty/unverified role to remove')
+            .setRequired(true)
+        )
+        .addChannelOption(option =>
+          option
+            .setName('channel')
+            .setDescription('Channel where verification happens')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('trigger_word')
+            .setDescription('Trigger word or password (for trigger method)')
+            .setRequired(false)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('disable')
+        .setDescription('Disable gateway verification for your server')
+    ),
+
   async execute(interaction) {
     try {
       const { client, guild, options } = interaction;
@@ -73,10 +124,16 @@ export default {
       }
     } catch (err) {
       console.error('[gateway command] Error:', err);
-      await interaction.reply({
-        content: '❌ An error occurred while executing this command.',
-        ephemeral: true,
-      });
+      try {
+        if (interaction.isRepliable() && !interaction.replied) {
+          await interaction.reply({
+            content: '❌ An error occurred while executing this command.',
+            ephemeral: true,
+          });
+        }
+      } catch (replyErr) {
+        console.error('[gateway command] Failed to send error reply:', replyErr);
+      }
     }
   },
 };
