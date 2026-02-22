@@ -50,6 +50,24 @@ export default {
             .setDescription('Trigger word or password (for trigger method)')
             .setRequired(false)
         )
+        .addStringOption(option =>
+          option
+            .setName('success_dm')
+            .setDescription('Custom DM message sent on successful verification')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('embed_title')
+            .setDescription('Title for the verification embed')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('embed_description')
+            .setDescription('Description for the verification embed')
+            .setRequired(false)
+        )
     )
     .addSubcommand(subcommand =>
       subcommand

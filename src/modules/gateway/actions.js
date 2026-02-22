@@ -145,8 +145,8 @@ export async function sendVerificationPrompt(channel, config) {
 
     const embed = {
       color: 0x2ecc71,
-      title: '🔐 Server Verification',
-      description: 'Click the button below or react to verify your account and gain access to the server.',
+      title: config.embedTitle || '🔐 Server Verification',
+      description: config.embedDescription || 'Click the button below or react to verify your account and gain access to the server.',
       footer: { text: 'Guardian Bot v4.0' },
     };
 
@@ -176,6 +176,17 @@ export async function sendVerificationPrompt(channel, config) {
       embeds: [embed],
       components: components.length > 0 ? components : undefined,
     });
+
+    // If using reaction method, ensure the bot pre-adds the configured reaction
+    if (config.method === 'reaction') {
+      try {
+        const emoji = config.reactionEmoji || '✅';
+        await sent.react(emoji).catch(() => {});
+      } catch (err) {
+        // Non-fatal: log and continue
+        console.error('[Gateway] Failed to add reaction to prompt:', err.message);
+      }
+    }
 
     return { success: true, message: 'Verification prompt sent' };
   } catch (err) {

@@ -59,24 +59,72 @@ export default function GatewayModule(client) {
      */
     async handleMessage(message) {
       try {
-        if (!message.guild || message.author.bot) return;
-
+        // Allow module to decide how to handle messages (including bot messages)
         const config = await GatewayConfig.findOne({ guildId: message.guildId });
         if (!config || !config.enabled) return;
 
-        // Only process if using trigger method
-        if (config.method !== 'trigger') return;
+        // Handle trigger word method
+        if (config.method === 'trigger') {
+          // Ignore empty messages
+          const content = (message.content || '').toString();
+          if (!content) return;
 
-        // Check if the message contains the trigger word
-        if (checkTriggerWord(message.content, config.triggerWord)) {
-          // React with checkmark
-          await reactWithCheckmark(message);
+          if (checkTriggerWord(content, config.triggerWord)) {
+            // First react with the configured emoji
+            try {
+              const emoji = config.reactionEmoji || '✅';
+              await message.react(emoji).catch(() => {});
+            } catch (err) {
+              console.error('[Gateway] Failed to react to trigger message:', err.message);
+            }
 
-          // Verify the user
-          await this.verifyUser(message.member, message, config, 'trigger');
+            // Then perform verification
+            await this.verifyUser(message.member, message, config, 'trigger');
+          }
         }
       } catch (err) {
         console.error('[Gateway] Message handler error:', err);
+      }
+    },
+
+    /**
+     * Handle reaction add events
+     * @param {MessageReaction} reaction
+     * @param {User} user
+     */
+    async handleReaction(reaction, user) {
+      try {
+        if (!reaction || !reaction.message) return;
+        if (user?.bot) return;
+
+        const message = reaction.message;
+        const guildId = message.guildId;
+        if (!guildId) return;
+
+        const config = await GatewayConfig.findOne({ guildId });
+        if (!config || !config.enabled) return;
+
+        // Only handle reaction method
+        if (config.method !== 'reaction') return;
+
+        const emoji = config.reactionEmoji || '✅';
+        const matches = (reaction.emoji && (reaction.emoji.name === emoji || reaction.emoji.toString() === emoji));
+        if (!matches) return;
+
+        // Ensure reaction happened in configured channel and on a bot message
+        if (message.channelId !== config.channelId) return;
+        if (!message.author || message.author.id !== client.user?.id) return;
+
+        // Fetch member for the reacting user
+        const guild = client.guilds.cache.get(guildId);
+        if (!guild) return;
+        const member = await guild.members.fetch(user.id).catch(() => null);
+        if (!member) return;
+
+        // Perform verification
+        await this.verifyUser(member, message, config, 'reaction');
+      } catch (err) {
+        console.error('[Gateway] Reaction handler error:', err);
       }
     },
 
@@ -176,7 +224,12 @@ export default function GatewayModule(client) {
         if (guild) {
           const channel = guild.channels.cache.get(channelId);
           if (channel) {
-            await sendVerificationPrompt(channel, config);
+            const promptResult = await sendVerificationPrompt(channel, config);
+
+            // If using reaction method, we already attempted to add the reaction in sendVerificationPrompt
+            if (config.method === 'reaction') {
+              console.log('[Gateway] Reaction prompt created and reaction pre-added (if possible)');
+            }
           }
         }
 

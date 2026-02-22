@@ -39,6 +39,21 @@ const GatewaySchema = new mongoose.Schema(
       default: 'You have been verified! Welcome to the server.',
       description: 'Private message sent to user upon successful verification',
     },
+    embedTitle: {
+      type: String,
+      default: '🔐 Server Verification',
+      description: 'Title for the verification embed sent to channel',
+    },
+    embedDescription: {
+      type: String,
+      default: 'Click the button below or react to verify your account and gain access to the server.',
+      description: 'Description for the verification embed',
+    },
+    reactionEmoji: {
+      type: String,
+      default: '✅',
+      description: 'Emoji used for reaction verification',
+    },
     raidMode: {
       type: Boolean,
       default: false,

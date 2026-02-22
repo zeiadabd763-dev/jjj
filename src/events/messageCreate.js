@@ -2,15 +2,9 @@ export default {
   name: 'messageCreate',
   async execute(message) {
     try {
-      // Ignore bot messages
-      if (message.author?.bot) return;
-
-      // Ignore DMs
-      if (!message.guild) return;
-
       const { client } = message;
 
-      // Allow Gateway module to handle message triggers
+      // Always forward every message to gateway handler if present
       if (client && client.gateway && typeof client.gateway.handleMessage === 'function') {
         try {
           await client.gateway.handleMessage(message);
