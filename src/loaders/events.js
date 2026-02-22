@@ -1,24 +1,27 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import fs from "fs";
+import path from "path";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default async function loadEvents(client) {
-  const eventsPath = path.join(__dirname, '../events');
-  if (!fs.existsSync(eventsPath)) return;
+      const eventsPath = path.join(__dirname, "../events");
+        if (!fs.existsSync(eventsPath)) return;
 
-  const files = fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'));
-  for (const file of files) {
-    const filePath = path.join(eventsPath, file);
-    try {
-      const event = await import(pathToFileURL(filePath).href);
-      const evt = event.default;
-      if (!evt || !evt.name || typeof evt.execute !== 'function') continue;
-      // Event name may be a string or Events enum; register with client
-      client.on(evt.name, (...args) => evt.execute(...args));
-    } catch (err) {
-      console.error(`Failed to load event ${file}:`, err);
-    }
-  }
+          const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith(".js"));
+
+            for (const file of eventFiles) {
+                    const filePath = pathToFileURL(path.join(eventsPath, file)).href;
+                        const eventModule = await import(filePath);
+                            const event = eventModule.default;
+
+                                if (event && event.name) {
+                                          if (event.once) {
+                                                    client.once(event.name, (...args) => event.execute(...args));
+                                          } else {
+                                                    client.on(event.name, (...args) => event.execute(...args));
+                                          }
+                                }
+            }
+              console.log(`[INFO] Loaded ${eventFiles.length} events successfully.`);
 }
