@@ -14,24 +14,49 @@ import { validateRaidShield, getAccountAgeDays } from './checker.js';
  * @returns {Object} Embed object
  */
 /**
- * Build an embed using page-specific UI or falling back to theme
+ * Build an embed using page-specific UI
  * @param {Object} config - Gateway config from DB
  * @param {string} overrideMessage - Optional message to use for description
- * @param {string} pageKey - 'success' | 'alreadyVerified' | 'error' | undefined
+ * @param {string} pageKey - 'success' | 'alreadyVerified' | 'error' | 'dm' | 'prompt' | undefined
  */
 export function createEmbed(config, overrideMessage = '', pageKey = '') {
-  const theme = config.theme || {};
-
-  // select page object
   let page = {};
+  
+  // Select page object based on pageKey
   if (pageKey === 'success') page = config.successUI || {};
   else if (pageKey === 'alreadyVerified') page = config.alreadyVerifiedUI || {};
   else if (pageKey === 'error') page = config.errorUI || {};
+  else if (pageKey === 'dm') page = config.dmUI || {};
+  else if (pageKey === 'prompt') page = config.promptUI || {};
 
-  const title = page.title || theme.title || '🔐 Server Verification';
-  const description = overrideMessage || page.desc || theme.description || 'Verification processed.';
-  const colorHex = page.color || theme.color || '#2ecc71';
+  // Default fallback values per page type
+  let defaultTitle = '🔐 Server Verification';
+  let defaultDesc = 'Verification processed.';
+  let defaultColor = '#2ecc71';
+
+  if (pageKey === 'success') {
+    defaultTitle = '✅ Success';
+    defaultDesc = 'You have been verified! Welcome to the server.';
+    defaultColor = '#2ecc71';
+  } else if (pageKey === 'alreadyVerified') {
+    defaultTitle = '⏭️ Already Verified';
+    defaultDesc = 'You are already verified in this server!';
+    defaultColor = '#ffa500';
+  } else if (pageKey === 'error') {
+    defaultTitle = '❌ Error';
+    defaultDesc = 'Verification failed.';
+    defaultColor = '#ff0000';
+  } else if (pageKey === 'dm') {
+    defaultTitle = '✅ Welcome';
+    defaultDesc = 'You have been verified! Welcome to the server.';
+    defaultColor = '#2ecc71';
+  }
+
+  const title = page.title || defaultTitle;
+  const description = overrideMessage || page.desc || defaultDesc;
+  const colorHex = page.color || defaultColor;
   const color = parseInt((colorHex || '#2ecc71').replace('#', ''), 16);
+
   const embed = {
     title,
     description,
@@ -39,8 +64,10 @@ export function createEmbed(config, overrideMessage = '', pageKey = '') {
     footer: { text: 'Guardian Bot v4.0' },
   };
 
-  const imageUrl = page.image || theme.image || '';
-  if (imageUrl && imageUrl.trim()) embed.image = { url: imageUrl };
+  const imageUrl = page.image || '';
+  if (imageUrl && imageUrl.trim()) {
+    embed.image = { url: imageUrl };
+  }
 
   return embed;
 }
@@ -108,10 +135,8 @@ export async function verifyMember(member, config, method) {
     // Step 3: Send styled DM with Chic UI (robust error handling)
     let dmFailed = false;
     try {
-      const dmMessage = config.successDM || 'You have been verified! Welcome to the server.';
-      const dmEmbed = createEmbed(config, dmMessage, 'success');
+      const dmEmbed = createEmbed(config, '', 'dm');
 
-      // Prefer sending via user object to avoid member cache issues
       let user = member && member.user ? member.user : null;
       if (!user && member && member.client) {
         try {
@@ -129,7 +154,6 @@ export async function verifyMember(member, config, method) {
           await user.send({ embeds: [dmEmbed] });
           console.log(`[Gateway] DM sent successfully to ${user.tag || user.id}`);
         } catch (dmErr) {
-          // Non-fatal: DM failure shouldn't prevent verification
           dmFailed = true;
           const dmCode = dmErr && (dmErr.code || dmErr.httpStatus) ? (dmErr.code || dmErr.httpStatus) : 'UNKNOWN';
           const dmReason = dmErr && dmErr.code === 50007 ? 'User has DMs disabled' : (dmErr && dmErr.message ? dmErr.message : JSON.stringify(dmErr));
@@ -138,6 +162,7 @@ export async function verifyMember(member, config, method) {
       }
     } catch (embedErr) {
       console.error('[Gateway] Failed to create DM embed:', embedErr && embedErr.message ? embedErr.message : embedErr);
+      dmFailed = true;
     }
 
     return { 
@@ -176,23 +201,45 @@ export async function sendChannelEmbed(channel, config, message) {
  * Send verification prompt to channel
  * @param {TextChannel} channel - Channel to send to
  * @param {Object} config - Gateway config
+ * @param {string} method - The method being used (button, trigger, slash, join)
  * @returns {Object} { success: boolean, message: string }
  */
-export async function sendVerificationPrompt(channel, config) {
+export async function sendVerificationPrompt(channel, config, method) {
   try {
     if (!channel || !channel.send) {
       return { success: false, message: 'Invalid channel' };
     }
 
-    const message = config.embedDescription || 'Click the button below to verify your account and gain access to the server.';
-    const embed = createEmbed(config, message);
+    // Get initial message customization for this method, fall back to defaults
+    const methodInitial = config.initialMessage?.[method] || {};
+    let title = methodInitial.title || '🔐 Server Verification';
+    let desc = methodInitial.desc || 'Click the button below to verify your account.';
+    const image = methodInitial.image || '';
+
+    // For prompt customization override
+    if (config.promptUI?.title) title = config.promptUI.title;
+    if (config.promptUI?.desc) desc = config.promptUI.desc;
+
+    const embed = {
+      title,
+      description: desc,
+      color: parseInt((config.promptUI?.color || '#2ecc71').replace('#', ''), 16),
+      footer: { text: 'Guardian Bot v4.0' },
+    };
+
+    if (image && image.trim()) {
+      embed.image = { url: image };
+    }
+    if (config.promptUI?.image && config.promptUI.image.trim()) {
+      embed.image = { url: config.promptUI.image };
+    }
 
     const payload = {
       embeds: [embed],
     };
 
-    // For button method, create a button with ActionRowBuilder
-    if (config.method === 'button') {
+    // For button method, attach button
+    if (method === 'button') {
       const button = new ButtonBuilder()
         .setCustomId('gateway_verify_button')
         .setLabel('Verify')
@@ -205,8 +252,8 @@ export async function sendVerificationPrompt(channel, config) {
     }
 
     // For trigger method, add instructions
-    if (config.method === 'trigger') {
-      embed.description += `\n\n**Type this to verify:** \`${config.triggerWord}\``;
+    if (method === 'trigger') {
+      embed.description += `\n\n**Trigger Word:** \`${config.methods.trigger.triggerWord}\``;
     }
 
     await channel.send(payload);

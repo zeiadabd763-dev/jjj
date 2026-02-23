@@ -8,17 +8,7 @@ const GatewaySchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
-    method: {
-      type: String,
-      enum: ['button', 'trigger', 'slash', 'join'],
-      default: 'button',
-      description: 'Verification method: button, trigger, slash, or join',
-    },
-    channel: {
-      type: String,
-      required: true,
-      description: 'Channel where verification method is active',
-    },
+    // Core roles for all methods
     verifiedRole: {
       type: String,
       required: true,
@@ -29,81 +19,88 @@ const GatewaySchema = new mongoose.Schema(
       required: true,
       description: 'Role ID to remove when user is verified (penalty role)',
     },
-    triggerWord: {
-      type: String,
-      default: '',
-      description: 'Word/phrase that triggers verification (for trigger method)',
-    },
-    successDM: {
-      type: String,
-      default: 'You have been verified! Welcome to the server.',
-      description: 'Private message sent to user upon successful verification',
-    },
-    alreadyVerifiedMsg: {
-      type: String,
-      default: 'You are already verified in this server!',
-      description: 'Message sent when user is already verified',
-    },
-    embedTitle: {
-      type: String,
-      default: '🔐 Server Verification',
-      description: 'Title for the verification embed sent to channel',
-    },
-    embedDescription: {
-      type: String,
-      default: 'Click the button below to verify your account and gain access to the server.',
-      description: 'Description for the verification embed',
-    },
-    embedColor: {
-      type: String,
-      default: '#2ecc71',
-      description: 'Hex color code for verification embeds (default: green)',
-    },
-    embedImage: {
-      type: String,
-      default: '',
-      description: 'URL for banner/thumbnail image in verification embeds',
-    },
-    // Theme: main bot theme used as fallback for specific pages
-    theme: {
-      title: {
-        type: String,
-        default: '🔐 Server Verification',
+
+    // Multi-method configuration - each method can be independently enabled
+    methods: {
+      button: {
+        enabled: { type: Boolean, default: false },
+        channel: { type: String, default: '' },
       },
-      description: {
-        type: String,
-        default: 'Click the button below to verify your account and gain access to the server.',
+      trigger: {
+        enabled: { type: Boolean, default: false },
+        channel: { type: String, default: '' },
+        triggerWord: { type: String, default: '' },
       },
-      color: {
-        type: String,
-        default: '#2ecc71',
+      slash: {
+        enabled: { type: Boolean, default: false },
+        channel: { type: String, default: '' },
       },
-      image: {
-        type: String,
-        default: '',
+      join: {
+        enabled: { type: Boolean, default: false },
       },
     },
 
-    // Page-specific UI overrides
-    successUI: {
+    // Initial message customization per method (the prompt sent to channel)
+    initialMessage: {
+      button: {
+        title: { type: String, default: '🔐 Server Verification' },
+        desc: { type: String, default: 'Click the button below to verify your account.' },
+        image: { type: String, default: '' },
+      },
+      trigger: {
+        title: { type: String, default: '🔐 Server Verification' },
+        desc: { type: String, default: 'Send the trigger word to verify your account.' },
+        image: { type: String, default: '' },
+      },
+      slash: {
+        title: { type: String, default: '🔐 Server Verification' },
+        desc: { type: String, default: 'Use /verify to verify your account.' },
+        image: { type: String, default: '' },
+      },
+      join: {
+        title: { type: String, default: '🔐 Server Verification' },
+        desc: { type: String, default: 'Welcome! You will be verified automatically.' },
+        image: { type: String, default: '' },
+      },
+    },
+
+    // DM customization
+    dmUI: {
+      title: { type: String, default: '✅ Welcome' },
+      desc: { type: String, default: 'You have been verified! Welcome to the server.' },
+      color: { type: String, default: '#2ecc71' },
+      image: { type: String, default: '' },
+    },
+
+    // Prompt/Initial Message customization (overrides initialMessage)
+    promptUI: {
       title: { type: String, default: '' },
       desc: { type: String, default: '' },
       color: { type: String, default: '' },
+      image: { type: String, default: '' },
+    },
+
+    // Response page customization
+    successUI: {
+      title: { type: String, default: '✅ Success' },
+      desc: { type: String, default: 'Verification successful! Welcome to the server.' },
+      color: { type: String, default: '#2ecc71' },
       image: { type: String, default: '' },
     },
     alreadyVerifiedUI: {
-      title: { type: String, default: '' },
-      desc: { type: String, default: '' },
-      color: { type: String, default: '' },
+      title: { type: String, default: '⏭️ Already Verified' },
+      desc: { type: String, default: 'You are already verified in this server!' },
+      color: { type: String, default: '#ffa500' },
       image: { type: String, default: '' },
     },
     errorUI: {
-      title: { type: String, default: '' },
-      desc: { type: String, default: '' },
-      color: { type: String, default: '' },
+      title: { type: String, default: '❌ Error' },
+      desc: { type: String, default: 'Verification failed.' },
+      color: { type: String, default: '#ff0000' },
       image: { type: String, default: '' },
     },
 
+    // Core settings
     enabled: {
       type: Boolean,
       default: true,

@@ -1,7 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import GatewayConfig from '../../modules/gateway/schema.js';
 import { verifyMember, createEmbed } from '../../modules/gateway/actions.js';
-import { validateRaidShield } from '../../modules/gateway/checker.js';
 
 export default {
   data: new SlashCommandBuilder()
@@ -23,24 +22,19 @@ export default {
         return;
       }
 
-      // Only allow /verify if method is slash
-      if (config.method !== 'slash') {
-        const methodNames = {
-          button: 'button',
-          trigger: 'trigger word',
-          join: 'join',
-        };
+      // Only allow /verify if slash method is enabled
+      if (!config.methods?.slash?.enabled) {
         await interaction.reply({
-          content: `❌ This server uses the **${methodNames[config.method]}** verification method, not the slash command.`,
+          content: '❌ The slash command verification method is not enabled on this server.',
           ephemeral: true,
         });
         return;
       }
 
       // STRICT CHANNEL LOCKDOWN: /verify slash command only works in the configured channel
-      if (interaction.channelId !== config.channel) {
-        const channel = guild.channels.cache.get(config.channel);
-        const channelMention = channel ? `<#${config.channel}>` : '#unknown-channel';
+      if (interaction.channelId !== config.methods.slash.channel) {
+        const channel = guild.channels.cache.get(config.methods.slash.channel);
+        const channelMention = channel ? `<#${config.methods.slash.channel}>` : '#unknown-channel';
         await interaction.reply({
           content: `❌ This command is only available in ${channelMention}`,
           ephemeral: true,
@@ -59,6 +53,7 @@ export default {
         });
       } else if (result.success) {
         const embed = createEmbed(config, '✅ Verification successful! Welcome to the server.', 'success');
+        // Slash success in correct channel is PUBLIC
         await interaction.reply({
           embeds: [embed],
           ephemeral: false,
