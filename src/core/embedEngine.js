@@ -55,6 +55,16 @@ export function render(data = {}, placeholders = {}) {
       ph.user_joindate = ph.user_joindate || (member.joinedAt ? member.joinedAt.toISOString() : '');
       ph.server_boostcount = ph.server_boostcount || (member.guild?.premiumSubscriptionCount || 0);
       ph.server = ph.server || (member.guild?.name || '');
+      
+      // user join position
+      try {
+        const members = Array.from(member.guild.members.cache.values());
+        members.sort((a, b) => a.joinedAt - b.joinedAt);
+        const joinPosition = members.findIndex(m => m.id === member.id) + 1;
+        ph['user.join_position'] = joinPosition.toString();
+      } catch (_e) {
+        ph['user.join_position'] = 'Unknown';
+      }
     }
   }
 

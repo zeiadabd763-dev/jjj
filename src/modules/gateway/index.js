@@ -39,12 +39,19 @@ export default function GatewayModule(client) {
 
           if (result.alreadyVerified) {
             const embed = await createEmbed(config, result.message, 'alreadyVerified', interaction.member);
-            // Button success is EPHEMERAL (private)
+            // Button response is EPHEMERAL (private)
             await interaction.reply({ embeds: [embed], ephemeral: true });
           } else if (result.success) {
-            const embed = await createEmbed(config, '✅ Verification successful! Welcome to the server.', 'success', interaction.member);
-            // Button success is EPHEMERAL (private)
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            // Loading state: send processing embed
+            const loadingEmbed = await createEmbed(config, '🔄 Processing verification...', 'success', interaction.member);
+            await interaction.reply({ embeds: [loadingEmbed], ephemeral: true });
+            
+            // Wait 2 seconds for "Data Processing" simulation
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Digital ID Pass: Member ID Card style
+            const idCardEmbed = await createEmbed(config, `**Member ID Card**\n\n**Join Position:** {user.join_position}\n**Status:** ✅ Verified\n\nWelcome to the server!`, 'success', interaction.member);
+            await interaction.editReply({ embeds: [idCardEmbed] });
             
             // Send DM
             if (result.dmFailed) {
@@ -113,11 +120,28 @@ export default function GatewayModule(client) {
           
           if (result.alreadyVerified || result.success) {
             try {
+              // Loading state: send processing embed
+              const loadingEmbed = await createEmbed(config, '🔄 Processing verification...', 'success', message.member);
+              const loadingMessage = await message.channel.send({ embeds: [loadingEmbed] });
+              
+              // Wait 2 seconds for "Data Processing" simulation
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              // Digital ID Pass: Member ID Card style
               const pageKey = result.alreadyVerified ? 'alreadyVerified' : 'success';
-              const msg = result.alreadyVerified ? (result.message || '') : '✅ Verification successful! Welcome to the server.';
+              const msg = result.alreadyVerified ? (result.message || '') : `**Member ID Card**\n\n**Join Position:** {user.join_position}\n**Status:** ✅ Verified\n\nWelcome to the server!`;
               const channelEmbed = await createEmbed(config, msg, pageKey, message.member);
               // Trigger success is PUBLIC
-              await message.channel.send({ embeds: [channelEmbed] });
+              await loadingMessage.edit({ embeds: [channelEmbed] });
+              
+              // Cleanup: Delete the user's trigger message immediately after success
+              if (result.success) {
+                try {
+                  await message.delete();
+                } catch (deleteErr) {
+                  console.error('[Gateway] Failed to delete trigger message:', deleteErr.message);
+                }
+              }
             } catch (sendErr) {
               console.error('[Gateway] Failed to send channel embed:', sendErr.message);
             }

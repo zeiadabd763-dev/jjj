@@ -47,7 +47,64 @@ export default class TaskScheduler {
   }
 
   async checkExpiredRoles() {
-    // هنا سنضع منطق البحث في الداتابيز عن الرتب المنتهية وسحبها
-    // سيتم برمجتها عند البدء في ميزة Temporary Roles
+    // Scan GatewayConfig for tempRoles that reached expiresAt and remove them
+    // Use filtered query to only scan active guilds for efficiency
+    try {
+      const activeConfigs = await mongoose.model('GatewayConfig').find({ enabled: true });
+      
+      for (const config of activeConfigs) {
+        if (!config.userStates || typeof config.userStates !== 'object') continue;
+        
+        let hasChanges = false;
+        const updates = {};
+        
+        for (const [userId, userState] of Object.entries(config.userStates)) {
+          if (!userState.tempRoles || !Array.isArray(userState.tempRoles)) continue;
+          
+          const activeTempRoles = userState.tempRoles.filter(role => {
+            if (!role.expiresAt) return true; // Keep roles without expiration
+            return new Date(role.expiresAt) > new Date(); // Keep if not expired
+          });
+          
+          if (activeTempRoles.length !== userState.tempRoles.length) {
+            updates[`userStates.${userId}.tempRoles`] = activeTempRoles;
+            hasChanges = true;
+            
+            // Remove expired roles from the member if they're in the guild
+            const expiredRoles = userState.tempRoles.filter(role => 
+              role.expiresAt && new Date(role.expiresAt) <= new Date()
+            );
+            
+            if (expiredRoles.length > 0) {
+              try {
+                const guild = this.client.guilds.cache.get(config.guildId);
+                if (guild) {
+                  const member = await guild.members.fetch(userId).catch(() => null);
+                  if (member) {
+                    for (const expiredRole of expiredRoles) {
+                      if (member.roles.cache.has(expiredRole.roleId)) {
+                        await member.roles.remove(expiredRole.roleId);
+                        console.log(`[TaskScheduler] Removed expired temp role ${expiredRole.roleId} from user ${userId} in guild ${config.guildId}`);
+                      }
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error(`[TaskScheduler] Failed to remove expired roles for user ${userId}:`, err.message);
+              }
+            }
+          }
+        }
+        
+        if (hasChanges) {
+          await mongoose.model('GatewayConfig').updateOne(
+            { _id: config._id },
+            { $set: updates }
+          );
+        }
+      }
+    } catch (error) {
+      console.error('[TaskScheduler] Error in checkExpiredRoles:', error);
+    }
   }
 }

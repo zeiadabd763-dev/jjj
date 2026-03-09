@@ -8,6 +8,7 @@ import { validateRaidShield, getAccountAgeDays } from './checker.js';
 import { parseColor } from '../../utils/parseColor.js';
 import { render as renderEmbed } from '../../core/embedEngine.js';
 import { BoundedMap } from '../../utils/cache.js';
+import { parsePlaceholders } from '../../utils/placeholders.js';
 
 // simple in-memory cache for rendered embeds; keyed the same way as before
 const embedCache = new BoundedMap(100);
@@ -45,7 +46,7 @@ export function clearEmbedCache(guildId) {
  */
 export async function createEmbed(config, overrideMessage = '', pageKey = '', member = null) {
   const gid = config.guildId || config.guild || '';
-  const cacheKey = `${gid}:${pageKey}:${overrideMessage}`;
+  const cacheKey = `${gid}:${member?.id || ''}:${pageKey}:${overrideMessage}`;
 
   if (embedCache.has(cacheKey)) {
     return embedCache.get(cacheKey);
@@ -137,13 +138,23 @@ export async function verifyMember(member, config, method) {
       }
     }
 
-    // Step 1: Add verified role first (ensures user ends up with the correct role even
+    // Step 1: Check that both roles exist before attempting swap
+    const verifiedRole = member.guild.roles.cache.get(config.verifiedRole);
+    const unverifiedRole = member.guild.roles.cache.get(config.unverifiedRole);
+    
+    if (!verifiedRole) {
+      console.error(`[Gateway] Verified role ${config.verifiedRole} not found in guild ${member.guild.id}`);
+      return { success: false, message: 'Verified role not found in server. Please contact an administrator.' };
+    }
+    
+    if (!unverifiedRole) {
+      console.error(`[Gateway] Unverified role ${config.unverifiedRole} not found in guild ${member.guild.id}`);
+      return { success: false, message: 'Unverified role not found in server. Please contact an administrator.' };
+    }
+
+    // Step 2: Add verified role first (ensures user ends up with the correct role even
     // if removal of the unverified role fails)
     try {
-      const verifiedRole = member.guild.roles.cache.get(config.verifiedRole);
-      if (!verifiedRole) {
-        return { success: false, message: `Verified role not found` };
-      }
       if (!member.roles.cache.has(config.verifiedRole)) {
         await member.roles.add(config.verifiedRole);
       }
@@ -151,10 +162,9 @@ export async function verifyMember(member, config, method) {
       return { success: false, message: `Failed to add verified role: ${err.message}` };
     }
 
-    // Step 2: Remove unverified role after successful addition
+    // Step 3: Remove unverified role after successful addition
     try {
-      const unverifiedRole = member.guild.roles.cache.get(config.unverifiedRole);
-      if (unverifiedRole && member.roles.cache.has(config.unverifiedRole)) {
+      if (member.roles.cache.has(config.unverifiedRole)) {
         await member.roles.remove(config.unverifiedRole);
       }
     } catch (err) {

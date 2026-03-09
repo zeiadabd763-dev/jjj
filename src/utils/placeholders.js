@@ -34,6 +34,16 @@ export async function parsePlaceholders(text, member) {
       result = result.replace(/{server}/g, guild.name || '');
       result = result.replace(/{member_count}/g, (guild.memberCount || '').toString());
 
+      // user join position
+      try {
+        const members = Array.from(guild.members.cache.values());
+        members.sort((a, b) => a.joinedAt - b.joinedAt);
+        const joinPosition = members.findIndex(m => m.id === member.id) + 1;
+        result = result.replace(/{user\.join_position}/g, joinPosition.toString());
+      } catch (_e) {
+        result = result.replace(/{user\.join_position}/g, 'Unknown');
+      }
+
       // invitations - best effort lookup
       try {
         const invites = await guild.invites.fetch();
