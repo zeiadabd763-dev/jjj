@@ -39,9 +39,9 @@ export async function parsePlaceholders(text, member) {
         const members = Array.from(guild.members.cache.values());
         members.sort((a, b) => a.joinedAt - b.joinedAt);
         const joinPosition = members.findIndex(m => m.id === member.id) + 1;
-        result = result.replace(/{user\.join_position}/g, joinPosition.toString());
+        result = result.replace(/{join_pos}/g, joinPosition.toString());
       } catch (_e) {
-        result = result.replace(/{user\.join_position}/g, 'Unknown');
+        result = result.replace(/{join_pos}/g, 'Unknown');
       }
 
       // invitations - best effort lookup

@@ -61,9 +61,9 @@ export function render(data = {}, placeholders = {}) {
         const members = Array.from(member.guild.members.cache.values());
         members.sort((a, b) => a.joinedAt - b.joinedAt);
         const joinPosition = members.findIndex(m => m.id === member.id) + 1;
-        ph['user.join_position'] = joinPosition.toString();
+        ph['join_pos'] = joinPosition.toString();
       } catch (_e) {
-        ph['user.join_position'] = 'Unknown';
+        ph['join_pos'] = 'Unknown';
       }
     }
   }

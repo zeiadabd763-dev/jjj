@@ -104,8 +104,9 @@ export async function verifyMember(member, config, method) {
   }
 
   try {
-    if (!member || !member.user || !member.roles) {
-      return { success: false, message: 'Invalid member object' };
+    // GUARDS & SAFETY: Verify existence of member, guild, roles, and channel
+    if (!member || !member.user || !member.roles || !member.guild) {
+      return { success: false, message: 'Invalid member or guild object' };
     }
 
     // Gateway should only act when the member currently has the configured unverified role
@@ -143,12 +144,12 @@ export async function verifyMember(member, config, method) {
     const unverifiedRole = member.guild.roles.cache.get(config.unverifiedRole);
     
     if (!verifiedRole) {
-      console.error(`[Gateway] Verified role ${config.verifiedRole} not found in guild ${member.guild.id}`);
+      console.error(`CRITICAL: Gateway roles not found in server settings. Verified role ${config.verifiedRole} missing in guild ${member.guild.id}`);
       return { success: false, message: 'Verified role not found in server. Please contact an administrator.' };
     }
     
     if (!unverifiedRole) {
-      console.error(`[Gateway] Unverified role ${config.unverifiedRole} not found in guild ${member.guild.id}`);
+      console.error(`CRITICAL: Gateway roles not found in server settings. Unverified role ${config.unverifiedRole} missing in guild ${member.guild.id}`);
       return { success: false, message: 'Unverified role not found in server. Please contact an administrator.' };
     }
 

@@ -5,6 +5,7 @@
  */
 
 import mongoose from 'mongoose';
+import GatewayConfig from '../modules/gateway/schema.js';
 
 export default class TaskScheduler {
   constructor(client) {
@@ -47,12 +48,14 @@ export default class TaskScheduler {
   }
 
   async checkExpiredRoles() {
-    // Scan GatewayConfig for tempRoles that reached expiresAt and remove them
-    // Use filtered query to only scan active guilds for efficiency
+    // Optimized Query: Use find({ "userStates.tempRoles.expiresAt": { $lte: new Date() } })
     try {
-      const activeConfigs = await mongoose.model('GatewayConfig').find({ enabled: true });
+      const configsWithExpiredRoles = await GatewayConfig.find({
+        enabled: true,
+        "userStates.tempRoles.expiresAt": { $lte: new Date() }
+      });
       
-      for (const config of activeConfigs) {
+      for (const config of configsWithExpiredRoles) {
         if (!config.userStates || typeof config.userStates !== 'object') continue;
         
         let hasChanges = false;
@@ -97,7 +100,7 @@ export default class TaskScheduler {
         }
         
         if (hasChanges) {
-          await mongoose.model('GatewayConfig').updateOne(
+          await GatewayConfig.updateOne(
             { _id: config._id },
             { $set: updates }
           );

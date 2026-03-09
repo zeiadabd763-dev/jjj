@@ -63,7 +63,7 @@ export default {
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         // Digital ID Pass: Member ID Card style
-        const idCardEmbed = await createEmbed(config, `**Member ID Card**\n\n**Join Position:** {user.join_position}\n**Status:** ✅ Verified\n\nWelcome to the server!`, 'success', member);
+        const idCardEmbed = await createEmbed(config, `**Member ID Card**\n\n**Join Position:** {join_pos}\n**Status:** ✅ Verified\n\nWelcome to the server!`, 'success', member);
         await interaction.editReply({ embeds: [idCardEmbed] });
         
         // If DM failed, send ephemeral notification

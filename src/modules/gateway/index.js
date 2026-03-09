@@ -50,7 +50,7 @@ export default function GatewayModule(client) {
             await new Promise(resolve => setTimeout(resolve, 2000));
             
             // Digital ID Pass: Member ID Card style
-            const idCardEmbed = await createEmbed(config, `**Member ID Card**\n\n**Join Position:** {user.join_position}\n**Status:** ✅ Verified\n\nWelcome to the server!`, 'success', interaction.member);
+            const idCardEmbed = await createEmbed(config, `**Member ID Card**\n\n**Join Position:** {join_pos}\n**Status:** ✅ Verified\n\nWelcome to the server!`, 'success', interaction.member);
             await interaction.editReply({ embeds: [idCardEmbed] });
             
             // Send DM
@@ -129,7 +129,7 @@ export default function GatewayModule(client) {
               
               // Digital ID Pass: Member ID Card style
               const pageKey = result.alreadyVerified ? 'alreadyVerified' : 'success';
-              const msg = result.alreadyVerified ? (result.message || '') : `**Member ID Card**\n\n**Join Position:** {user.join_position}\n**Status:** ✅ Verified\n\nWelcome to the server!`;
+              const msg = result.alreadyVerified ? (result.message || '') : `**Member ID Card**\n\n**Join Position:** {join_pos}\n**Status:** ✅ Verified\n\nWelcome to the server!`;
               const channelEmbed = await createEmbed(config, msg, pageKey, message.member);
               // Trigger success is PUBLIC
               await loadingMessage.edit({ embeds: [channelEmbed] });
@@ -137,7 +137,9 @@ export default function GatewayModule(client) {
               // Cleanup: Delete the user's trigger message immediately after success
               if (result.success) {
                 try {
-                  await message.delete();
+                  if (message.deletable) {
+                    await message.delete();
+                  }
                 } catch (deleteErr) {
                   console.error('[Gateway] Failed to delete trigger message:', deleteErr.message);
                 }
