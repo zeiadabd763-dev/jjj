@@ -70,7 +70,7 @@ export function render(data = {}, placeholders = {}) {
       
       // user avatar
       try {
-        ph['user.avatar'] = member.displayAvatarURL({ dynamic: true, size: 512 }) || '';
+        ph['user.avatar'] = member.displayAvatarURL({ extension: "png", size: 256, forceStatic: false }) || '';
       } catch (_e) {
         ph['user.avatar'] = '';
       }
