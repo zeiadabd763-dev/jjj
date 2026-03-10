@@ -254,7 +254,99 @@ export async function sendChannelEmbed(channel, config, message, member = null) 
     return { success: false, message: `Failed to send embed: ${err.message}` };
   }
 }
+/**
+ * Lockdown DM verification gauntlet. Uses interactive collectors.
+ * @param {GuildMember} member
+ * @param {Object} config
+ */
+export async function startDMVerification(member, config) {
+  if (!member || !member.user) return false;
+  try {
+    const user = member.user;
+    let dmChannel;
+    try {
+      dmChannel = await user.createDM();
+    } catch {
+      // fallback via send
+      dmChannel = await user.send('👋 Starting lockdown verification...').then(m => m.channel).catch(() => null);
+    }
+    if (!dmChannel) return false;
 
+    // Phase 1: Color
+    const colors = ['Red', 'Green', 'Blue'];
+    const target = colors[Math.floor(Math.random() * colors.length)];
+    const shuffled = [...colors].sort(() => Math.random() - 0.5);
+    const row = new ActionRowBuilder().addComponents(
+      shuffled.map(c =>
+        new ButtonBuilder()
+          .setCustomId(`lockdown_color_${c.toLowerCase()}`)
+          .setLabel(c)
+          .setStyle(ButtonStyle.Primary)
+      )
+    );
+    const prompt1 = await dmChannel.send({ content: `🔐 **Phase 1:** Select the **${target}** button.`, components: [row] });
+    const passed1 = await new Promise(resolve => {
+      const filter = i => i.user.id === user.id && i.customId.startsWith('lockdown_color_');
+      const collector = prompt1.createMessageComponentCollector({ filter, time: 60000, max: 1 });
+      collector.on('collect', i => {
+        i.deferUpdate().catch(() => {});
+        const pick = i.customId.replace('lockdown_color_', '');
+        resolve(pick === target.toLowerCase());
+      });
+      collector.on('end', col => { if (col.size === 0) resolve(false); });
+    });
+    if (!passed1) {
+      await dmChannel.send('❌ Incorrect selection or timeout. Verification failed.');
+      return false;
+    }
+
+    // Phase 2: Numeric code
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    await dmChannel.send(`🔢 **Phase 2:** Reply with this code: \`${code}\``);
+    const passed2 = await new Promise(resolve => {
+      const collector = dmChannel.createMessageCollector({ filter: m => m.author.id === user.id, time: 60000, max: 1 });
+      collector.on('collect', m => resolve(m.content.trim() === code));
+      collector.on('end', col => resolve(false));
+    });
+    if (!passed2) {
+      await dmChannel.send('❌ Incorrect code or timeout. Verification failed.');
+      return false;
+    }
+
+    // Phase 3: Animal image
+    const animals = [
+      { name: 'lion', url: 'https://i.imgur.com/4AiXzf8.jpg' },
+      { name: 'cat', url: 'https://i.imgur.com/JlUvsxa.jpg' },
+      { name: 'dog', url: 'https://i.imgur.com/0nQn5vA.jpg' },
+    ];
+    const pick = animals[Math.floor(Math.random() * animals.length)];
+    await dmChannel.send({ content: '🐾 **Phase 3:** What animal is shown below?', files: [pick.url] });
+    const passed3 = await new Promise(resolve => {
+      const collector = dmChannel.createMessageCollector({ filter: m => m.author.id === user.id, time: 60000, max: 1 });
+      collector.on('collect', m => resolve(m.content.trim().toLowerCase() === pick.name));
+      collector.on('end', col => resolve(false));
+    });
+    if (!passed3) {
+      await dmChannel.send('❌ Wrong animal or timeout. Verification failed.');
+      return false;
+    }
+
+    // Finalize via verifyMember and send ID card back in DM
+    const result = await verifyMember(member, config, 'lockdown');
+    if (result.success) {
+      const idCardEmbed = await createEmbed(config, DEFAULT_ID_CARD, 'success', member);
+      await dmChannel.send({ embeds: [idCardEmbed] }).catch(() => {});
+      return true;
+    } else {
+      await dmChannel.send(`❌ Final verification failed: ${result.message || 'unknown error'}`);
+      return false;
+    }
+  } catch (err) {
+    console.error('[Gateway] startDMVerification error:', err);
+    try { await member.user.send('⚠️ An error occurred during the lockdown verification process.'); } catch {};
+    return false;
+  }
+}
 /**
  * أرسل رسالة التحقق الأولية للـ channel (Prompt)
  * بتشمل زر Verify للـ button method، وتعرض الـ trigger word للـ trigger method

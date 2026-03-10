@@ -79,6 +79,7 @@ const GatewaySchema = new mongoose.Schema(
       color: { type: String, default: '#2ecc71' },
       image: { type: String, default: '' },
     },
+    lockdownMode: { type: Boolean, default: false },
     alreadyVerifiedUI: {
       title: { type: String, default: '⏭️ Already Verified' },
       desc: { type: String, default: 'You are already verified in this server!' },

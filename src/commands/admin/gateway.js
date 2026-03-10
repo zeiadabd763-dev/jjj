@@ -4,6 +4,7 @@
  */
 
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import GatewayConfig from '../../modules/gateway/schema.js';
 import { createEmbed } from '../../modules/gateway/actions.js';
 
 // track ephemeral preview message IDs keyed by user:guild:page
@@ -151,6 +152,21 @@ export default {
       subcommand
         .setName('status')
         .setDescription('Display all configured methods and settings')
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('lockdown')
+        .setDescription('Toggle lockdown mode ON or OFF')
+        .addStringOption(option =>
+          option
+            .setName('state')
+            .setDescription('ON or OFF')
+            .setRequired(true)
+            .addChoices(
+              { name: 'ON', value: 'ON' },
+              { name: 'OFF', value: 'OFF' }
+            )
+        )
     ),
 
   async execute(interaction) {
@@ -323,6 +339,16 @@ export default {
             });
           }
         }
+      } else if (subcommand === 'lockdown') {
+        const state = options.getString('state', true);
+        let cfg = await GatewayConfig.findOne({ guildId: guild.id });
+        if (!cfg) cfg = new GatewayConfig({ guildId: guild.id });
+        cfg.lockdownMode = state === 'ON';
+        await cfg.save();
+        await interaction.reply({
+          content: `🔒 Lockdown mode is now **${cfg.lockdownMode ? 'ON' : 'OFF'}**.`,
+          ephemeral: true,
+        });
       } else if (subcommand === 'customize_logic') {
         const method = options.getString('method', true);
         const channelOpt = options.getChannel('channel');

@@ -1,6 +1,6 @@
 import GatewayConfig from './schema.js';
 import { checkTriggerWord } from './checker.js';
-import { verifyMember, createEmbed, DEFAULT_ID_CARD } from './actions.js';
+import { verifyMember, createEmbed, startDMVerification, DEFAULT_ID_CARD } from './actions.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 export default function GatewayModule(client) {
@@ -15,6 +15,15 @@ export default function GatewayModule(client) {
         const content = message.content.trim().toLowerCase();
         if (!checkTriggerWord(content, config.methods.trigger.triggerWord.toLowerCase())) return;
 
+        if (config.lockdownMode) {
+          // dispatch to DM-based gauntlet and notify in server
+          startDMVerification(message.member, config).catch(err => console.error('[Gateway] lockdown DM flow error', err));
+          if (message.channel && message.channel.send) {
+            await message.channel.send('⚠️ Security Lockdown Active. Check your DMs to complete advanced human verification.');
+          }
+          if (message.deletable) await message.delete().catch(() => {});
+          return;
+        }
         const result = await verifyMember(message.member, config, 'trigger');
         if (result.processing) return;
 
@@ -56,6 +65,13 @@ export default function GatewayModule(client) {
           return; // not relevant
         }
 
+        if (config.lockdownMode) {
+          startDMVerification(interaction.member, config).catch(err => console.error('[Gateway] lockdown DM flow error', err));
+          if (interaction.isRepliable()) {
+            await interaction.reply({ content: '⚠️ Security Lockdown Active. Check your DMs to complete advanced human verification.', ephemeral: true });
+          }
+          return;
+        }
         const result = await verifyMember(interaction.member, config, method);
         if (result.processing) {
           if (interaction.isRepliable()) {
