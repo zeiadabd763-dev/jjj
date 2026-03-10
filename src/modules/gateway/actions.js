@@ -284,27 +284,36 @@ export async function startDMVerification(member, config) {
           .setStyle(ButtonStyle.Primary)
       )
     );
-    const prompt1 = await dmChannel.send({ content: `🔐 **Phase 1:** Select the **${target}** button.`, components: [row] });
-    const passed1 = await new Promise(resolve => {
-      const filter = i => i.user.id === user.id && i.customId.startsWith('lockdown_color_');
-      const collector = prompt1.createMessageComponentCollector({ filter, time: 60000, max: 1 });
-      collector.on('collect', i => {
-        i.deferUpdate().catch(() => {});
-        const pick = i.customId.replace('lockdown_color_', '');
-        resolve(pick === target.toLowerCase());
+    let passed1 = false;
+    try {
+      const prompt1 = await dmChannel.send({ content: `🔐 **Phase 1:** Select the **${target}** button.`, components: [row] });
+      passed1 = await new Promise(resolve => {
+        const filter = i => i.user.id === user.id && i.customId.startsWith('lockdown_color_');
+        let collector;
+        try {
+          collector = prompt1.createMessageComponentCollector({ filter, time: 60000, max: 1 });
+        } catch (_e) {
+          return resolve(false);
+        }
+        collector.on('collect', i => {
+          i.deferUpdate().catch(() => {});
+          const pick = i.customId.replace('lockdown_color_', '');
+          resolve(pick === target.toLowerCase());
+        });
+        collector.on('end', col => { if (col.size === 0) resolve(false); });
       });
-      collector.on('end', col => { if (col.size === 0) resolve(false); });
-    });
+    } catch (e) {
+      passed1 = false;
+    }
     if (!passed1) {
       await dmChannel.send('❌ Incorrect selection or timeout. Verification failed.');
       return false;
     }
 
-    // Phase 2: Numeric code - send as SVG image attachment to obfuscate
+    // Phase 2: Numeric code – inline spaced digits
     const code = String(Math.floor(1000 + Math.random() * 9000));
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80"><rect width="100%" height="100%" fill="#ffffff"/><text x="50%" y="50%" font-size="40" font-family="Arial" text-anchor="middle" dominant-baseline="middle" fill="#000000">${code}</text></svg>`;
-    const buffer = Buffer.from(svg);
-    await dmChannel.send({ content: '🔢 **Phase 2:** Reply with the code shown below.', files: [{ attachment: buffer, name: 'code.svg' }] });
+    const spaced = code.split('').join(' ');
+    await dmChannel.send(`🔢 **Phase 2:** Your code is: **${spaced}**`);
     const passed2 = await new Promise(resolve => {
       const collector = dmChannel.createMessageCollector({ filter: m => m.author.id === user.id, time: 60000, max: 1 });
       collector.on('collect', m => resolve(m.content.trim() === code));
@@ -315,15 +324,16 @@ export async function startDMVerification(member, config) {
       return false;
     }
 
-    // Phase 3: Animal image (local assets)
-    const path = require('path');
+    // Phase 3: Emoji animal
     const animals = [
-      { name: 'lion', file: path.join(__dirname, '../../assets/animals/lion.png') },
-      { name: 'cat',  file: path.join(__dirname, '../../assets/animals/cat.png')  },
-      { name: 'dog',  file: path.join(__dirname, '../../assets/animals/dog.png')  },
+      { name: 'lion', emoji: '🦁' },
+      { name: 'cat', emoji: '🐱' },
+      { name: 'dog', emoji: '🐶' },
+      { name: 'elephant', emoji: '🐘' },
+      { name: 'penguin', emoji: '🐧' },
     ];
     const pick = animals[Math.floor(Math.random() * animals.length)];
-    await dmChannel.send({ content: '🐾 **Phase 3:** What animal is shown below?', files: [{ attachment: pick.file, name: `${pick.name}.png` }] });
+    await dmChannel.send(`🐾 **Phase 3:** What animal is this emoji? ${pick.emoji} (Write the name in English)`);
     const passed3 = await new Promise(resolve => {
       const collector = dmChannel.createMessageCollector({ filter: m => m.author.id === user.id, time: 60000, max: 1 });
       collector.on('collect', m => resolve(m.content.trim().toLowerCase() === pick.name.toLowerCase()));
