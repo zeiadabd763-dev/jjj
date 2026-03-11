@@ -242,6 +242,51 @@ export async function verifyMember(member, config, method) {
 }
 
 /**
+ * Return the appropriate response based on the current lockdown level stored
+ * in the gateway configuration.
+ *
+ * Level 0: normal behavior – just call verifyMember and return its result.
+ * Level 1: simple DM gauntlet (startDMVerification) – user is notified in
+ *          channel that they must check DMs.  The function returns an object
+ *          with `lockdown:1` so callers know the request was diverted.
+ * Level 2: strict DM gauntlet (startStrictGauntlet) – similar to level 1 but
+ *          invokes the extra-harsh flow.  Returns `{lockdown:2}`.
+ * Level 3: completely block all verification; the caller should surface the
+ *          provided message to the user.
+ * Any other value falls back to normal verification.
+ *
+ * @param {GuildMember} member
+ * @param {Object} config  - GatewayConfig from MongoDB
+ * @param {string} method  - original method name (button/trigger/slash/join)
+ * @returns {Promise<Object>} result-like object used by the various entry
+ * points in `gateway/index.js` and `/verify` command.
+ */
+export async function getLockdownResponse(member, config, method) {
+  const level = typeof config.lockdownLevel === 'number' ? config.lockdownLevel : 0;
+
+  switch (level) {
+    case 0:
+      return verifyMember(member, config, method);
+    case 1:
+      // basic DM gauntlet; callers are responsible for notifying the channel
+      startDMVerification(member, config).catch(err =>
+        console.error('[Gateway] lockdown DM flow error', err)
+      );
+      return { lockdown: 1 };
+    case 2:
+      startStrictGauntlet(member, config).catch(err =>
+        console.error('[Gateway] strict lockdown flow error', err)
+      );
+      return { lockdown: 2 };
+    case 3:
+      return { lockdown: 3, message: '⚠️ System Closed: verification temporarily disabled.' };
+    default:
+      // unknown level, treat as normal
+      return verifyMember(member, config, method);
+  }
+}
+
+/**
  * أرسل embed في channel (helper مساعد)
  */
 export async function sendChannelEmbed(channel, config, message, member = null) {
@@ -357,6 +402,94 @@ export async function startDMVerification(member, config) {
   } catch (err) {
     console.error('[Gateway] startDMVerification error:', err);
     try { await member.user.send('⚠️ An error occurred during the lockdown verification process.'); } catch {};
+    return false;
+  }
+}
+
+/**
+ * Severe verification gauntlet used at lockdown level 2.  This flow is meant
+ * to be intentionally annoying/hard and will kick or ban users who fail any of
+ * the stages.  It mirrors the basic DM gauntlet but adds a 15‑second wait,
+ * a honeypot button that results in a ban, a simple logic/riddle question, and
+ * kicks on final failure.
+ *
+ * @param {GuildMember} member
+ * @param {Object} config
+ */
+export async function startStrictGauntlet(member, config) {
+  if (!member || !member.user) return false;
+  try {
+    const user = member.user;
+    let dmChannel;
+    try {
+      dmChannel = await user.createDM();
+    } catch {
+      // fallback via send
+      dmChannel = await user.send('👋 Starting **strict** lockdown verification...')
+        .then(m => m.channel)
+        .catch(() => null);
+    }
+    if (!dmChannel) return false;
+
+    // 1) 15‑second forced delay
+    await dmChannel.send('⏳ **Strict Verification:** Please wait 15 seconds before proceeding...');
+    await new Promise(r => setTimeout(r, 15000));
+
+    // 2) honeypot button – do NOT click or user is banned
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('lockdown_honeypot')
+        .setLabel('Do NOT click this button')
+        .setStyle(ButtonStyle.Danger)
+    );
+    let clicked = false;
+    try {
+      const promptMsg = await dmChannel.send({
+        content: '🛑 **Honeypot:** if you click the red button below you will be **banned immediately**. Do not press it.',
+        components: [row],
+      });
+      const filter = i => i.user.id === user.id && i.customId === 'lockdown_honeypot';
+      const collector = promptMsg.createMessageComponentCollector({ filter, time: 15000, max: 1 });
+      collector.on('collect', i => {
+        clicked = true;
+        i.deferUpdate().catch(() => {});
+      });
+      await new Promise(res => collector.on('end', () => res()));
+    } catch (_e) {
+      // ignore
+    }
+    if (clicked) {
+      try { await member.ban({ reason: 'Honeypot clicked during strict verification' }); } catch {};
+      return false;
+    }
+
+    // 3) Simple logic test
+    await dmChannel.send('🧠 **Logic Test:** What is **2 + 2**?');
+    const passedLogic = await new Promise(resolve => {
+      const collector = dmChannel.createMessageCollector({ filter: m => m.author.id === user.id, time: 15000, max: 1 });
+      collector.on('collect', m => resolve(m.content.trim() === '4'));
+      collector.on('end', () => resolve(false));
+    });
+    if (!passedLogic) {
+      try { await member.kick('Failed logic test during strict verification'); } catch {};
+      await dmChannel.send('❌ Logic test failed. You have been removed from the server.');
+      return false;
+    }
+
+    // 4) final verifyMember step (gives roles/ID card similar to DM gauntlet)
+    const result = await verifyMember(member, config, 'lockdownStrict');
+    if (result.success) {
+      const idCardEmbed = await createEmbed(config, DEFAULT_ID_CARD, 'success', member);
+      await dmChannel.send({ embeds: [idCardEmbed] }).catch(() => {});
+      return true;
+    } else {
+      await dmChannel.send(`❌ Final verification failed: ${result.message || 'unknown error'}`);
+      try { await member.kick('Final verification failed'); } catch {};
+      return false;
+    }
+  } catch (err) {
+    console.error('[Gateway] startStrictGauntlet error:', err);
+    try { await member.user.send('⚠️ An error occurred during the strict lockdown verification process.'); } catch {};
     return false;
   }
 }

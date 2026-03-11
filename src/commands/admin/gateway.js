@@ -156,15 +156,17 @@ export default {
     .addSubcommand(subcommand =>
       subcommand
         .setName('lockdown')
-        .setDescription('Toggle lockdown mode ON or OFF')
-        .addStringOption(option =>
+        .setDescription('Set lockdown level (0‑3)')
+        .addIntegerOption(option =>
           option
-            .setName('state')
-            .setDescription('ON or OFF')
+            .setName('level')
+            .setDescription('0 = normal, 1 = simple, 2 = strict, 3 = closed')
             .setRequired(true)
             .addChoices(
-              { name: 'ON', value: 'ON' },
-              { name: 'OFF', value: 'OFF' }
+              { name: '0 – Normal', value: 0 },
+              { name: '1 – Simple Gauntlet', value: 1 },
+              { name: '2 – Strict Gauntlet', value: 2 },
+              { name: '3 – System Closed', value: 3 }
             )
         )
     ),
@@ -340,13 +342,16 @@ export default {
           }
         }
       } else if (subcommand === 'lockdown') {
-        const state = options.getString('state', true);
+        const level = options.getInteger('level', true);
         let cfg = await GatewayConfig.findOne({ guildId: guild.id });
         if (!cfg) cfg = new GatewayConfig({ guildId: guild.id });
-        cfg.lockdownMode = state === 'ON';
+        cfg.lockdownLevel = level;
+        // keep backwards boolean for any legacy checks
+        cfg.lockdownMode = level > 0;
         await cfg.save();
+        const descriptions = ['Normal', 'Simple DM Gauntlet', 'Strict DM Gauntlet', 'System Closed'];
         await interaction.reply({
-          content: `🔒 Lockdown mode is now **${cfg.lockdownMode ? 'ON' : 'OFF'}**.`,
+          content: `🔒 Lockdown level set to **${level} – ${descriptions[level] || 'Unknown'}**.`,
           ephemeral: true,
         });
       } else if (subcommand === 'customize_logic') {

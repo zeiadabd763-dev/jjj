@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import GatewayConfig from '../../modules/gateway/schema.js';
-import { verifyMember, createEmbed, DEFAULT_ID_CARD, startDMVerification } from '../../modules/gateway/actions.js';
+import { verifyMember, createEmbed, DEFAULT_ID_CARD, startDMVerification, getLockdownResponse } from '../../modules/gateway/actions.js';
 
 export default {
   data: new SlashCommandBuilder().setName('verify').setDescription('Run the verification flow.'),
@@ -13,16 +13,22 @@ export default {
       if (interaction.channelId !== config.methods.slash.channel)
         return interaction.reply({ content: `❌ Only works in <#${config.methods.slash.channel}>`, ephemeral: true });
 
-      // global lockdown check: all methods redirect to DM gauntlet
-      if (config.lockdownMode) {
-        await startDMVerification(member, config);
-        return interaction.reply({
-          content: '⚠️ Security Lockdown Active. Check your DMs to complete advanced human verification.',
-          ephemeral: true,
-        });
+      // handle lockdown levels
+      const lockdownResult = await getLockdownResponse(member, config, 'slash');
+      if (lockdownResult) {
+        if (lockdownResult.lockdown === 1 || lockdownResult.lockdown === 2) {
+          await startDMVerification(member, config);
+          return interaction.reply({
+            content: '⚠️ Security Lockdown Active. Check your DMs to complete advanced human verification.',
+            ephemeral: true,
+          });
+        }
+        if (lockdownResult.lockdown === 3) {
+          return interaction.reply({ content: lockdownResult.message, ephemeral: true });
+        }
       }
 
-      const result = await verifyMember(member, config, 'slash');
+      const result = lockdownResult && !lockdownResult.lockdown ? lockdownResult : await verifyMember(member, config, 'slash');
       if (result.processing)
         return interaction.reply({ content: '⏳ Please wait...', ephemeral: true });
 

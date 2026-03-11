@@ -1,6 +1,6 @@
 import GatewayConfig from './schema.js';
 import { checkTriggerWord } from './checker.js';
-import { verifyMember, createEmbed, startDMVerification, DEFAULT_ID_CARD } from './actions.js';
+import { verifyMember, createEmbed, startDMVerification, DEFAULT_ID_CARD, getLockdownResponse } from './actions.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 export default function GatewayModule(client) {
@@ -15,16 +15,27 @@ export default function GatewayModule(client) {
         const content = message.content.trim().toLowerCase();
         if (!checkTriggerWord(content, config.methods.trigger.triggerWord.toLowerCase())) return;
 
-        if (config.lockdownMode) {
-          // dispatch to DM-based gauntlet and notify in server
-          startDMVerification(message.member, config).catch(err => console.error('[Gateway] lockdown DM flow error', err));
-          if (message.channel && message.channel.send) {
-            await message.channel.send('⚠️ Security Lockdown Active. Check your DMs to complete advanced human verification.');
+        // lockdown levels replace the old boolean flag
+        const lockdownResult = await getLockdownResponse(message.member, config, 'trigger');
+        if (lockdownResult) {
+          if (lockdownResult.lockdown === 1 || lockdownResult.lockdown === 2) {
+            if (message.channel && message.channel.send) {
+              await message.channel.send('⚠️ Security Lockdown Active. Check your DMs to complete advanced human verification.');
+            }
+            if (message.deletable) await message.delete().catch(() => {});
+            return;
+          } else if (lockdownResult.lockdown === 3) {
+            // system closed, inform user
+            if (message.channel && message.channel.send) {
+              await message.channel.send(lockdownResult.message);
+            }
+            if (message.deletable) await message.delete().catch(() => {});
+            return;
+          } else {
+            // level 0 or undefined -> result is a verifyMember-style object
           }
-          if (message.deletable) await message.delete().catch(() => {});
-          return;
         }
-        const result = await verifyMember(message.member, config, 'trigger');
+        const result = lockdownResult && !lockdownResult.lockdown ? lockdownResult : await verifyMember(message.member, config, 'trigger');
         if (result.processing) return;
 
         if (result.alreadyVerified) {
@@ -65,14 +76,22 @@ export default function GatewayModule(client) {
           return; // not relevant
         }
 
-        if (config.lockdownMode) {
-          startDMVerification(interaction.member, config).catch(err => console.error('[Gateway] lockdown DM flow error', err));
-          if (interaction.isRepliable()) {
-            await interaction.reply({ content: '⚠️ Security Lockdown Active. Check your DMs to complete advanced human verification.', ephemeral: true });
+        const lockdownResult = await getLockdownResponse(interaction.member, config, method);
+        if (lockdownResult) {
+          if (lockdownResult.lockdown === 1 || lockdownResult.lockdown === 2) {
+            startDMVerification(interaction.member, config).catch(err => console.error('[Gateway] lockdown DM flow error', err));
+            if (interaction.isRepliable()) {
+              await interaction.reply({ content: '⚠️ Security Lockdown Active. Check your DMs to complete advanced human verification.', ephemeral: true });
+            }
+            return;
+          } else if (lockdownResult.lockdown === 3) {
+            if (interaction.isRepliable()) {
+              await interaction.reply({ content: lockdownResult.message, ephemeral: true });
+            }
+            return;
           }
-          return;
         }
-        const result = await verifyMember(interaction.member, config, method);
+        const result = lockdownResult && !lockdownResult.lockdown ? lockdownResult : await verifyMember(interaction.member, config, method);
         if (result.processing) {
           if (interaction.isRepliable()) {
             await interaction.reply({ content: '⏳ Please wait...', ephemeral: true }).catch(() => {});

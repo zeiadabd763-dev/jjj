@@ -79,7 +79,10 @@ const GatewaySchema = new mongoose.Schema(
       color: { type: String, default: '#2ecc71' },
       image: { type: String, default: '' },
     },
+    // legacy boolean for backwards compatibility (true when level > 0)
     lockdownMode: { type: Boolean, default: false },
+    // 0 = normal, 1 = simple DM gauntlet, 2 = strict gauntlet, 3 = closed
+    lockdownLevel: { type: Number, default: 0 },
     alreadyVerifiedUI: {
       title: { type: String, default: '⏭️ Already Verified' },
       desc: { type: String, default: 'You are already verified in this server!' },
