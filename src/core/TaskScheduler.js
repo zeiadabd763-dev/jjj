@@ -61,8 +61,12 @@ export default class TaskScheduler {
         let hasChanges = false;
         const updates = {};
         
-        for (const [userId, userState] of Object.entries(config.userStates)) {
-          if (!userState.tempRoles || !Array.isArray(userState.tempRoles)) continue;
+        const userStateEntries = config.userStates instanceof Map
+          ? config.userStates.entries()
+          : Object.entries(config.userStates || {});
+
+        for (const [userId, userState] of userStateEntries) {
+          if (!userState || !userState.tempRoles || !Array.isArray(userState.tempRoles)) continue;
           
           const activeTempRoles = userState.tempRoles.filter(role => {
             if (!role.expiresAt) return true; // Keep roles without expiration
